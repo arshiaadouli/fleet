@@ -1,0 +1,23 @@
+# Secrets, never commit these (copy fleet/.env.example to fleet/.env instead)
+.env
+cred.json
+
+# Local databases and logs
+*.db
+*.log
+
+# Sale data read from the POS and saved receipts
+hex/
+pdfs/
+
+# Python environments and PyInstaller output
+.venv/
+.venv-linux/
+__pycache__/
+*.pyc
+build/
+dist/
+
+# Local-only extras
+ui_backup_original/
+*.lnk

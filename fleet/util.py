@@ -1,0 +1,84 @@
+from selenium.webdriver.remote.webdriver import WebDriver
+
+def attach_to_session(executor_url: str, session_id: str) -> WebDriver:
+    from selenium.webdriver.chrome.options import Options
+    """
+    Reconnect to an existing Selenium session using executor_url and session_id.
+    """
+    original_execute = WebDriver.execute
+
+    def new_command_execute(self, command, params=None):
+        if command == "newSession":
+            # ✅ Selenium 4 expects "value" dict containing "sessionId"
+            return {"value": {"sessionId": session_id}}
+        return original_execute(self, command, params)
+
+    WebDriver.execute = new_command_execute
+
+    try:
+        options = Options()
+        driver = WebDriver(command_executor=executor_url, options=options)
+        driver.session_id = session_id
+    finally:
+        WebDriver.execute = original_execute
+
+    return driver
+
+
+import requests
+import os
+
+def save_pdf_from_url(url: str, save_dir: str, filename: str):
+    # Ensure the directory exists
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Full path for saving
+    file_path = os.path.join(save_dir, filename)
+
+    # Fetch the PDF from the URL
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # raise error if download failed
+
+    # Save PDF to file
+    with open(file_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    print(f"PDF saved to {file_path}")
+    
+    
+    
+import os
+import json
+import shutil
+import subprocess
+
+# C:\paths.json on Windows when it exists, otherwise paths.json in this folder
+LOCAL_PATHS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paths.json")
+PATHS_FILE = r"C:\paths.json" if os.name == "nt" and os.path.exists(r"C:\paths.json") else LOCAL_PATHS_FILE
+
+def read_json():
+    with open(PATHS_FILE, "r") as f:
+        path_data = json.load(f)
+        return path_data
+
+def path_format(path):
+    # Convert both / and \ to the current OS's separator
+    return path.replace('\\', '/').replace('/', os.sep)
+
+WINDOWS_SOUNDS = {
+    "error": r"C:\Windows\Media\Windows Critical Stop.wav",
+    "notify": r"C:\Windows\Media\Windows Notify.wav",
+}
+LINUX_SOUNDS = {
+    "error": "/usr/share/sounds/freedesktop/stereo/dialog-error.oga",
+    "notify": "/usr/share/sounds/freedesktop/stereo/message.oga",
+}
+
+def play_sound(kind):
+    """Play the "error" or "notify" alert sound."""
+    if os.name == "nt":
+        from playsound import playsound
+        playsound(WINDOWS_SOUNDS[kind])
+    elif shutil.which("paplay") and os.path.exists(LINUX_SOUNDS[kind]):
+        subprocess.run(["paplay", LINUX_SOUNDS[kind]])

@@ -1,0 +1,61 @@
+from selenium.webdriver.remote.webdriver import WebDriver
+import os
+import json
+def attach_to_session(executor_url: str, session_id: str) -> WebDriver:
+    from selenium.webdriver.chrome.options import Options
+    """
+    Reconnect to an existing Selenium session using executor_url and session_id.
+    """
+    original_execute = WebDriver.execute
+
+    def new_command_execute(self, command, params=None):
+        if command == "newSession":
+            # ✅ Selenium 4 expects "value" dict containing "sessionId"
+            return {"value": {"sessionId": session_id}}
+        return original_execute(self, command, params)
+
+    WebDriver.execute = new_command_execute
+
+    try:
+        options = Options()
+        driver = WebDriver(command_executor=executor_url, options=options)
+        driver.session_id = session_id
+    finally:
+        WebDriver.execute = original_execute
+
+    return driver
+
+
+import requests
+import os
+
+def save_pdf_from_url(url: str, save_dir: str, filename: str):
+    # Ensure the directory exists
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Full path for saving
+    file_path = os.path.join(save_dir, filename)
+
+    # Fetch the PDF from the URL
+    response = requests.get(url, stream=True)
+    response.raise_for_status()  # raise error if download failed
+
+    # Save PDF to file
+    with open(file_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    print(f"PDF saved to {file_path}")
+    
+    
+    
+
+def read_json():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = "C:\paths.json"  # Windows
+    with open(file_path, "r") as f:
+        path_data = json.load(f)
+        return path_data
+
+def path_format(path):
+    return r""+path.replace('/', '\\')+""
