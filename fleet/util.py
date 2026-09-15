@@ -53,9 +53,9 @@ import json
 import shutil
 import subprocess
 
-# C:\paths.json on Windows when it exists, otherwise paths.json in this folder
-LOCAL_PATHS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paths.json")
-PATHS_FILE = r"C:\paths.json" if os.name == "nt" and os.path.exists(r"C:\paths.json") else LOCAL_PATHS_FILE
+# paths.json in this folder holds all file locations
+FLEET_DIR = os.path.dirname(os.path.abspath(__file__))
+PATHS_FILE = os.path.join(FLEET_DIR, "paths.json")
 
 def read_json():
     with open(PATHS_FILE, "r") as f:
@@ -63,8 +63,9 @@ def read_json():
         return path_data
 
 def path_format(path):
-    # Convert both / and \ to the current OS's separator
-    return path.replace('\\', '/').replace('/', os.sep)
+    # Convert both / and \ to the current OS's separator; relative paths are relative to this folder
+    path = path.replace('\\', '/').replace('/', os.sep)
+    return os.path.join(FLEET_DIR, path)
 
 WINDOWS_SOUNDS = {
     "error": r"C:\Windows\Media\Windows Critical Stop.wav",

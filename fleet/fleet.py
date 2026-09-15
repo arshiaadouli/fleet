@@ -34,7 +34,7 @@ invalid_options=[]
 import os
 from util import PATHS_FILE, path_format
 current_dir = os.path.dirname(os.path.abspath(__file__))
-file_path = PATHS_FILE  # C:\paths.json on Windows when it exists, otherwise fleet/paths.json
+file_path = PATHS_FILE  # fleet/paths.json
 json_path = os.path.join(current_dir, 'paths.json')
 with open(file_path, "r") as f:
     path_data = json.load(f)

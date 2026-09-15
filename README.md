@@ -49,12 +49,12 @@ A sale then goes like this:
 
    `.env` is git-ignored. Never commit it.
 
-3. Set the file locations in `paths.json`. The app uses `C:\paths.json` when it exists, otherwise `fleet/paths.json`.
+3. Set the file locations in `fleet/paths.json`. Relative paths are relative to the `fleet` folder.
 
    | Key | Meaning |
    | --- | --- |
-   | `cred` | Where `fleet.py` saves the browser session (`cred.json`) |
-   | `pdfDir` | Folder for saved PDF receipts |
+   | `cred` | Where `fleet.py` saves the browser session, `cred.json` (in the `fleet` folder) |
+   | `pdfDir` | Folder for saved PDF receipts, e.g. `C:\Users\user\Documents\pdfs` |
    | `cd` | Infinity POS cart file, e.g. `C:\InfinityPOS\1.CD2` |
    | `lr` | Infinity POS last receipt file, e.g. `C:\InfinityPOS\1.LR` |
    | `mouseMovement` | List of `{"x": ..., "y": ...}` screen points clicked in the Infinity POS window before the form opens |
