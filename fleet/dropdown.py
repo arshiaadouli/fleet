@@ -43,10 +43,6 @@ class Dropdown:
 
         options = ["Select", "Accessories", "Car Wash", "Engine Oil", "Ethanol Blend", "LPG", "Other", "Repair / Maintenance", "Roadside Assistance", "Super", "Tyres"]
 
-        height = root.winfo_height()
-        width = root.winfo_width()
-        new_height= height+ 50*len(items)+50
-        root.geometry(f"{width}x{new_height}")
         result = {}
 
         # self.selected_cat={}

@@ -16,10 +16,14 @@ pdfs/
 # Python environments and PyInstaller output
 .venv/
 .venv-linux/
+.venv313/
 __pycache__/
 *.pyc
 build/
 dist/
+
+# chromedriver 2.40, downloaded by cef_browser.py on first start
+drivers/
 
 # Local-only extras
 ui_backup_original/
