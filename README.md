@@ -8,10 +8,10 @@ Two programs run side by side:
 
 | Program | Started by | What it does |
 | --- | --- | --- |
-| `fleet/fleet.py` | `fleet.vbs` | Opens Chrome (chromedriver on port `9595`), logs in to the FleetCard site and saves the browser session to `cred.json`. Leave it running. |
-| `fleet/tkinter_fleet.py` | `tkinter.vbs` or `desktop_app.bat` | The Fuelzone window. Attaches to the Chrome session from `cred.json` and listens on `127.0.0.1:9000`. |
+| `fleet\fleet.py` | `fleet.vbs` | Opens Chrome (chromedriver on port `9595`), logs in to the FleetCard site and saves the browser session to `cred.json`. Leave it running. |
+| `fleet\tkinter_fleet.py` | `tkinter.vbs` or `desktop_app.bat` | The Fuelzone window. Attaches to the Chrome session from `cred.json` and listens on `127.0.0.1:9000`. |
 
-`main.bat` (runs `fleet/main.py`) tells the window to show itself. The window only appears when the POS cart (`1.CD2`) has items, has no payment yet, and has sale notes. Otherwise it plays the error sound.
+`main.bat` (runs `fleet\main.py`) tells the window to show itself. The window only appears when the POS cart (`1.CD2`) has items, has no payment yet, and has sale notes. Otherwise it plays the error sound.
 
 A sale then goes like this:
 
@@ -21,12 +21,14 @@ A sale then goes like this:
 
 ## Requirements
 
-- Windows with Google Chrome installed (Selenium downloads a matching chromedriver automatically)
-- Python 3.12+ with tkinter (tick "tcl/tk and IDLE" in the Python installer)
+- Windows 10 or 11 with Google Chrome installed (Selenium downloads a matching chromedriver automatically)
+- Python 3.12+ with tkinter (tick "tcl/tk and IDLE" and "Add python.exe to PATH" in the Python installer)
 - Infinity POS on the same machine
 - A FleetCard merchant login and access to the MongoDB server
 
 ## Setup
+
+Run the commands below in **Command Prompt** from the `fleetCard` folder.
 
 1. Create the virtual environment and install packages:
 
@@ -34,12 +36,11 @@ A sale then goes like this:
    fleet\setup_venv.bat
    ```
 
-   On Linux use `fleet/setup_venv.sh` (POS clicks and alert sounds are skipped there).
-
-2. Create `fleet/.env` from the example and fill in the real values:
+2. Create `fleet\.env` from the example, then fill in the real values:
 
    ```bat
    copy fleet\.env.example fleet\.env
+   notepad fleet\.env
    ```
 
    | Variable | Used for |
@@ -49,25 +50,35 @@ A sale then goes like this:
 
    `.env` is git-ignored. Never commit it.
 
-3. Set the file locations in `fleet/paths.json`. Relative paths are relative to the `fleet` folder.
+3. Set the file locations in `fleet\paths.json`:
+
+   ```bat
+   notepad fleet\paths.json
+   ```
+
+   Relative paths are relative to the `fleet` folder. Write paths with forward slashes (`C:/InfinityPOS/1.CD2`) or doubled backslashes (`C:\\InfinityPOS\\1.CD2`), because a single `\` isn't valid in JSON.
 
    | Key | Meaning |
    | --- | --- |
    | `cred` | Where `fleet.py` saves the browser session, `cred.json` (in the `fleet` folder) |
-   | `pdfDir` | Folder for saved PDF receipts, e.g. `C:\Users\user\Documents\pdfs` |
-   | `cd` | Infinity POS cart file, e.g. `C:\InfinityPOS\1.CD2` |
-   | `lr` | Infinity POS last receipt file, e.g. `C:\InfinityPOS\1.LR` |
+   | `pdfDir` | Folder for saved PDF receipts, e.g. `C:/Users/user/Documents/pdfs` |
+   | `cd` | Infinity POS cart file, e.g. `C:/InfinityPOS/1.CD2` |
+   | `lr` | Infinity POS last receipt file, e.g. `C:/InfinityPOS/1.LR` |
    | `mouseMovement` | List of `{"x": ..., "y": ...}` screen points clicked in the Infinity POS window before the form opens |
 
-4. The merchant ID is part of `PURCHASE_URL` in `fleet/tkinter_fleet.py`. Change it there for a different site.
+4. The merchant ID is part of `PURCHASE_URL` in `fleet\tkinter_fleet.py`. Change it there for a different site.
 
 ## Running
 
-1. Start `fleet.vbs` and wait for Chrome to finish logging in.
-2. Start `tkinter.vbs` (or `desktop_app.bat`).
+1. Double-click `fleet.vbs` and wait for Chrome to finish logging in.
+2. Double-click `tkinter.vbs` (or `desktop_app.bat`).
 3. Run `main.bat` when a fleet card sale is ready in the POS.
 
-Both scripts run hidden and use `fleet/.venv` when it exists. Output goes to `fleet/fleet.log`, `fleet/tkinter_fleet.log` and `fleet/main.log`.
+Both scripts run hidden and use `fleet\.venv` when it exists. Output goes to `fleet\fleet.log`, `fleet\tkinter_fleet.log` and `fleet\main.log`. To follow a log live:
+
+```bat
+powershell Get-Content fleet\tkinter_fleet.log -Wait
+```
 
 ## Building executables
 
@@ -75,27 +86,37 @@ PyInstaller isn't in `requirements.txt`, so install it first:
 
 ```bat
 cd fleet
-.venv\Scripts\pip install pyinstaller
-.venv\Scripts\pyinstaller tkinter_fleet.spec
-.venv\Scripts\pyinstaller fleet.spec
+.venv\Scripts\python.exe -m pip install pyinstaller
+.venv\Scripts\pyinstaller.exe tkinter_fleet.spec
+.venv\Scripts\pyinstaller.exe fleet.spec
 ```
 
-The executables are written to `fleet/dist`. Put `.env` next to the `.exe` files.
+The executables are written to `fleet\dist`. Put `.env` next to the `.exe` files.
 
 ## Troubleshooting
 
 - **"Error: can't reach the FleetCard browser, is fleet.py running?"** Start `fleet.vbs`. If you restart it, the window picks up the new browser on the next card, so there's no need to restart the window.
-- **The window doesn't appear.** Check that the POS sale has items, no payment yet, and sale notes, and that `tkinter_fleet.py` is running (nothing else may be using port 9000).
-- **Chrome won't start.** Another program may be using port 9595. Close old `chromedriver.exe` processes and start `fleet.vbs` again.
-- **Anything else.** Check the log files in `fleet/`.
+- **The window doesn't appear.** Check that the POS sale has items, no payment yet, and sale notes, and that `tkinter_fleet.py` is running. To see what's using port 9000:
+
+  ```bat
+  netstat -ano | findstr :9000
+  ```
+
+- **Chrome won't start.** Another program may be using port 9595. Close old chromedriver processes, then start `fleet.vbs` again:
+
+  ```bat
+  taskkill /F /IM chromedriver.exe
+  ```
+
+- **Anything else.** Check the log files in the `fleet` folder.
 
 ## Project layout
 
 ```
-fleetCard/
+fleetCard\
 ├── fleet.vbs, tkinter.vbs      hidden launchers for fleet.py and tkinter_fleet.py
 ├── desktop_app.bat, main.bat   start the window / show it for the current sale
-└── fleet/
+└── fleet\
     ├── fleet.py                Chrome start-up, FleetCard login and form-filling helpers
     ├── tkinter_fleet.py        the Fuelzone window (card and odometer screens)
     ├── dropdown.py             category picker for unmatched cart items
@@ -107,6 +128,7 @@ fleetCard/
     ├── util.py                 session attach, PDF download, paths and sounds
     ├── main.py                 sends "show" to the running window
     ├── paths.json              file locations (see Setup)
+    ├── setup_venv.bat          creates .venv and installs requirements.txt
     ├── .env.example            template for .env
     └── *.spec                  PyInstaller build files
 ```
