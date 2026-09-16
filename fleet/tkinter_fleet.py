@@ -5,8 +5,7 @@ from time import sleep
 import json
 import tkinter.font as tkFont
 import os
-from util import play_sound, PATHS_FILE, path_format
-import cef_browser
+from util import attach_to_session, play_sound, PATHS_FILE, path_format
 from mousemovement import mouse_movement
 from dropdown import *
 from tkinter import ttk
@@ -25,7 +24,6 @@ import ui_theme as ui
 first_time =True
 HOST = "127.0.0.1"   # local only
 PORT = 9000   # port for socket server
-WINDOW_SIZE = "900x800"   # the form on top, the FleetCard browser below it
 invalid_items = []
 def start_socket_server(root):
     """Start a socket server that unhides the Tkinter window whenever a client connects."""
@@ -84,17 +82,25 @@ except:
 dropdown = Dropdown()
 page_change_var = None
 db_items=[]
-# The browser is part of this window (cef_browser.py), get_purchase_driver fetches its driver for each card
-driver_instance = None
+music_path = path_format(path_data['cred'])
+with open(music_path, "r") as file:
+    data = json.load(file)
+    # Replace with printed values
+    executor_url = data['executor_url']
+    session_id = data['session_id']
+    # print(data)
+    driver_instance= attach_to_session(executor_url, session_id)
 
 PURCHASE_URL = "https://fco.fleetcard.com.au/Merchant/Transaction/Purchase/195342"
 
 def get_purchase_driver():
-    """Open a fresh purchase form in the embedded browser, logging in again if the site logged us out.
+    """Attach to the browser fleet.py saved in cred.json and open a fresh purchase form.
 
-    Call from a worker thread: the browser only loads pages while the Tk main loop is running.
+    cred.json is re-read every time so a restarted fleet.py (new session id) is picked up.
     """
-    driver = cef_browser.get_driver()
+    with open(music_path, "r") as file:
+        data = json.load(file)
+    driver = attach_to_session(data['executor_url'], data['session_id'])
     driver.get(PURCHASE_URL)
     if not driver.current_url.startswith(PURCHASE_URL):
         # The FleetCard site logged us out, log back in and open the form again
@@ -118,7 +124,7 @@ with open(file_path, "r") as f:
 # Create main Tkinter root
 root = tk.Tk()
 root.title("Fuelzone")
-root.geometry(WINDOW_SIZE)
+root.geometry("500x300")
 ui.style_root(root)
 import tkinter as tk
 import threading
@@ -178,7 +184,7 @@ def odo_content(driver, card_number, root, elements):
             driver = get_purchase_driver()
         except Exception as e:
             print("Could not open the purchase page:", e)
-            root.after(0, card_val_status_var.set, "Error: can't open the FleetCard page, see tkinter_fleet.log")
+            root.after(0, card_val_status_var.set, "Error: can't reach the FleetCard browser, is fleet.py running?")
             return
         try:
             result= products_filler(driver, "")
@@ -304,7 +310,6 @@ def odo_content(driver, card_number, root, elements):
     )
     redo_btn.config(font=ui.FONT_BUTTON)
     redo_btn.pack(side="right")
-    cef_browser.show(root)
 
     
     submitting = threading.Event()  # blocks a second submit (e.g. Enter held down) while one is running
@@ -388,26 +393,18 @@ def main_app():
     Main app GUI with card entry and submit button.
     """
     
-    cef_browser.initialize()
-
-    # Log in and open the purchase form in the background, the browser only loads pages once the
-    # main loop runs. Don't crash if that fails, each card submit opens the purchase page again
-    def open_purchase_page():
-        try:
-            get_purchase_driver()
-        except Exception as e:
-            print("Could not open the purchase page:", e)
-    threading.Thread(target=open_purchase_page, daemon=True).start()
+    # Don't crash when fleet.py isn't up yet, each card submit opens the purchase page again
+    try:
+        get_purchase_driver()
+    except Exception as e:
+        print("Could not open the purchase page:", e)
 
     # root.withdraw()
     # Bind Tab to submit button
     card_number_content(root, driver_instance)
     
-    root.geometry(WINDOW_SIZE)
-    try:
-        root.mainloop()
-    finally:
-        cef_browser.shutdown()
+    root.geometry("500x300")
+    root.mainloop()
     
 
 def card_number_content(root, driver_instance):
@@ -416,7 +413,7 @@ def card_number_content(root, driver_instance):
     # if not driver_instance.current_url =="https://fco.fleetcard.com.au/Merchant/Transaction/Purchase/195342":
     #     driver_instance.get("https://fco.fleetcard.com.au/Merchant/Transaction/Purchase/195342")
 
-    root.geometry(WINDOW_SIZE)
+    root.geometry("500x300")
 
     ui.show_header(root, step=1)
     card_label = tk.Label(root, text="CARD NUMBER", font=ui.FONT_CAPTION, fg=ui.TEXT_MUTED, bg=ui.BG, anchor="w")
@@ -438,7 +435,6 @@ def card_number_content(root, driver_instance):
     
 
     db_status_show()
-    cef_browser.show(root)
 
     root.bind("<Tab>", lambda event: card_submit.invoke())
     root.bind("<Return>", lambda event: card_submit.invoke())

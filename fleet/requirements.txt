@@ -1,10 +1,8 @@
-# Needs Python 3.9, the newest Python cefpython3 supports. setup_venv.bat creates the venv with it.
-# tkinter is not installed via pip. It ships with Python on Windows.
+# Install with the setup script for your OS: setup_venv.bat (Windows) or ./setup_venv.sh (Linux)
+# tkinter is not installed via pip. It ships with the Windows Python installer;
+# on Debian/Ubuntu install it with: sudo apt install python3-tk
 
-# Browser inside the window. 66.1 is the last cefpython3 release (Chromium 66)
-cefpython3==66.1; sys_platform == "win32"
-
-# Browser automation. On Python 3.9 pip picks selenium 4.36, the version tested with chromedriver 2.40
+# Browser automation
 selenium>=4.6
 undetected-chromedriver
 webdriver-manager
