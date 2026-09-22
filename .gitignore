@@ -16,6 +16,7 @@ pdfs/
 # Python environments and PyInstaller output
 .venv/
 .venv-linux/
+.venv*/
 __pycache__/
 *.pyc
 build/
@@ -31,3 +32,9 @@ ui_backup_original/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Fetched per machine: the WebView2 SDK (setup_venv.bat) and the chromedriver of the
+# installed runtime's major (downloaded on first start), plus a download cut short
+fleet/webview2/
+fleet/drivers/chromedriver_*.exe
+fleet/drivers/*.part

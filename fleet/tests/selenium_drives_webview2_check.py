@@ -14,14 +14,15 @@ again right before it is sent; otherwise that phase is skipped, never sent blind
 whatever else is on the desktop.
 
 The click is the operator's, and what it does depends on embedded_browser's
-PAGE_TAKES_MOUSE: with the module's default (False) the frame is disabled, so the click
-never reaches the browser, GotFocus never fires and the keystroke lands in the Tk entry;
-with PAGE_TAKES_MOUSE=1 in the environment the click takes the focus, the hand-back is
-measured (click -> GotFocus) with the Tk thread deliberately held for 200 ms, as a
-screen being built holds it, and the keystroke still has to land in the entry.
+PAGE_TAKES_MOUSE: with the module's default (True) the click takes the focus, the
+hand-back is measured (click -> GotFocus) with the Tk thread deliberately held for
+200 ms, as a screen being built holds it, the keystroke still has to land in the entry,
+and the wheel over the page has to scroll the form; with PAGE_TAKES_MOUSE=0 in the
+environment the frame is disabled, so the click never reaches the browser, GotFocus
+never fires and the keystroke lands in the Tk entry.
 
     fleet\\.venv\\Scripts\\python.exe tests\\selenium_drives_webview2_check.py
-    $env:PAGE_TAKES_MOUSE='1'; ...                the page takes the mouse, hand-back measured
+    $env:PAGE_TAKES_MOUSE='0'; ...                the page is display-only
 """
 import ctypes
 import ctypes.wintypes as wt
@@ -424,7 +425,49 @@ def click_into_the_page():
         # the one the hand-back has to live with, not the idle one.
         root.after(0, time.sleep, 0.2)
     root.after(400, type_z)
-    root.after(900, finish)
+    if MOUSE:
+        root.after(700, scroll_the_page)
+        root.after(4000, finish)   # only if the scroll read-back never comes
+    else:
+        root.after(900, finish)
+
+
+SCROLL_CHECK = "the wheel over the page scrolls the form (what PAGE_TAKES_MOUSE is for)"
+
+
+def scroll_the_page():
+    """The operator rolls the wheel over the form: it has to scroll, and the keyboard
+    has to stay in Tk while it does (a wheel never takes the focus)."""
+    ours = user32.GetAncestor(root.winfo_id(), 2)
+    x = frame.winfo_rootx() + frame.winfo_width() // 2
+    y = frame.winfo_rooty() + frame.winfo_height() // 2
+    at_point = user32.WindowFromPoint(wt.POINT(x, y))
+    if not our_window_is_foreground() or user32.GetAncestor(at_point, 2) != ours:
+        skip(SCROLL_CHECK, "the front changed (foreground %s, at point %s); no wheel was sent"
+             % (user32.GetForegroundWindow(), at_point))
+        return finish()
+    user32.SetCursorPos(x, y)
+    user32.mouse_event(0x0800, 0, 0, -360, 0)   # MOUSEEVENTF_WHEEL, three notches down
+    root.after(400, read_scroll)
+
+
+def read_scroll():
+    """scrollTop read through the controller (a .NET Task, polled from the Tk loop)."""
+    task = frame.controller.CoreWebView2.ExecuteScriptAsync("document.scrollingElement.scrollTop")
+
+    def poll():
+        if finished[0]:
+            return
+        if not task.IsCompleted:
+            return root.after(20, poll)
+        top = str(task.Result)
+        try:
+            value = float(json.loads(top))
+        except ValueError:
+            value = -1
+        check(SCROLL_CHECK, value > 0, "scrollTop %s after three wheel notches" % top)
+        finish()
+    root.after(20, poll)
 
 
 def type_z():

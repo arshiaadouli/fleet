@@ -13,19 +13,21 @@ It must never hold the keyboard. The card reader is a keyboard wedge, so anythin
 while the page has the Windows focus lands in the web page instead of the Tk entry -
 and trans_filler appends to what is there. Only a mouse click in the page moves the
 Windows focus into WebView2: not its creation, not a page load, not the page's own
-focus(), not Selenium (it types through DevTools). Two layers keep the keyboard in Tk:
+focus(), not Selenium (it types through DevTools). So the operator keeps the mouse - the
+form is taller than the frame and they scroll it - and the one moment the page can take
+the keyboard is handled:
 
-* mouse input to the page is disabled (EnableWindow on the frame, PAGE_TAKES_MOUSE =
-  False): no click can reach the browser, so the focus can never leave Tk. The page is
-  display-only - no scrolling - and that is the point: Selenium scrolls into view by
-  itself, and the operator has nothing to click there. A hand-back would race the
-  swipe: the keys typed between the browser taking the focus and Tk getting it back
-  land in the page, and Tk gets it back only when its loop turns, which is tens of
-  milliseconds while a screen or the category table is being built;
-* with PAGE_TAKES_MOUSE = True (the operator may scroll the form) the controller's
-  GotFocus fires the moment a click takes the focus; the handler hands it straight back
-  with user32.SetFocus, before it even returns, and Tk then puts the caret back where
-  the operator was typing (release_keyboard). The check measures that latency.
+* the controller's GotFocus fires the moment a click takes the focus; the handler hands
+  it straight back with user32.SetFocus, before it even returns, and Tk then puts the
+  caret back where the operator was typing (release_keyboard). The keys typed between
+  the click and the hand-back would land in the page, and the hand-back waits for the
+  Tk loop to turn: a few milliseconds idle, tens while a screen or the category table
+  is built (the check measures it with the loop held for 200 ms), never the length of a
+  sound - util.play_sound no longer blocks the loop - so a swipe cannot follow a click
+  that fast;
+* PAGE_TAKES_MOUSE = False is the locked-down alternative for a till where nobody
+  should touch the page: mouse input to the frame is disabled (EnableWindow), no click
+  reaches the browser, the focus can never leave Tk, and the page cannot be scrolled.
 
 Three rules the hosting stands on, each learned from a crash or a hang:
 
@@ -93,10 +95,10 @@ LOGIN_URL = "https://fco.fleetcard.com.au/"
 PURCHASE_URL = "https://fco.fleetcard.com.au/Merchant/Transaction/Purchase/195342"
 # The purchase form keeps its Fleet Card tab behind nested tables; fleet.py waits on it.
 FLEET_CARD_TAB_XPATH = "(//a[contains(@class, 'tab-btn')])[5]"
-# False: the page is display-only and the focus can never leave Tk. True: the operator
-# can click and scroll in the page, and a click's focus is handed back as soon as the
-# Tk loop turns.
-PAGE_TAKES_MOUSE = False
+# True: the operator can click and scroll in the page, and a click's focus is handed
+# back as soon as the Tk loop turns. False: the page is display-only (no scrolling) and
+# the focus can never leave Tk.
+PAGE_TAKES_MOUSE = True
 USER_DATA_PARENT = Path(os.environ["LOCALAPPDATA"]) / "Fuelzone" / "FleetCard" / "webview2"
 
 GA_ROOT = 2

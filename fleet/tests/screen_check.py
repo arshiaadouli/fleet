@@ -274,8 +274,8 @@ def check_second_odometer_screen():
 
 
 # ---- main.bat: "show" over the socket --------------------------------------------------
-# main.py connects and sends "show". The window has to be on screen BEFORE the Infinity
-# POS clicks from paths.json are made, and be back in front, caret in the entry, after.
+# main.py connects and sends "show". The Infinity POS clicks from paths.json come FIRST,
+# while the window is still hidden; then the window is shown, in front, caret in the entry.
 user32 = ctypes.windll.user32 if os.name == "nt" else None
 if user32 is not None:
     user32.GetForegroundWindow.restype = wt.HWND
@@ -373,39 +373,39 @@ def send_show():
     threading.Thread(target=knock, daemon=True).start()
 
 
-def check_pos_driven_after_show():
+def check_pos_driven_before_show():
     if "clicked" not in pos:
         return True
     clicked = pos["clicked"]
     check("show: the POS clicks from paths.json were made (mouse_movement(0, 4))",
           clicked["points"] == (0, 4), str(clicked["points"]))
-    check("show: they waited for the window to be on screen",
-          clicked["viewable"] and clicked["state"] == "normal" and clicked["visible"] is not False,
+    check("show: they were made while the window was still hidden",
+          not clicked["viewable"] and clicked["state"] == "withdrawn" and "mapped_at" not in pos,
           str(clicked))
-    check("show: they came after the window was mapped and had time to paint",
-          "mapped_at" in pos and clicked["at"] >= pos["mapped_at"] + 0.15,
-          "mapped at %s, clicked at %s" % (pos.get("mapped_at"), clicked["at"]))
-    check("show: they ran off the Tk thread, so the window keeps painting",
+    check("show: they ran off the Tk thread, so the Tk loop kept turning",
           clicked["thread"] != "MainThread", clicked["thread"])
 
 
-def check_window_back_in_front():
+def check_window_shown_after_clicks():
     if "clicked" not in pos:
         check("show: the POS was driven at all", False)
         return
     refocused = [t for t in pos["refocused"] if t > pos["clicked"]["at"] + 1.0]
     if not refocused or time.time() < refocused[0] + 0.3:
-        return True  # bring_back follows the clicks and their second of sleep; let it land
-    check("show: after the POS clicks the window is brought back with the caret in its entry",
+        return True  # show_now follows the clicks and their second of sleep; let it land
+    check("show: the window was shown only after the clicks and their second of sleep",
+          "mapped_at" in pos and pos["mapped_at"] >= pos["clicked"]["at"] + 1.0,
+          "clicked at %s, mapped at %s" % (pos["clicked"]["at"], pos.get("mapped_at")))
+    check("show: the window is on screen with the caret in its entry",
           app.root.state() == "normal" and app.root.focus_lastfor() is entries()[0],
           "state %s, caret on %s" % (app.root.state(), app.root.focus_lastfor()))
     if not pos.get("standin_in_front"):
-        print("  SKIP  show: the POS stand-in could not take the front, so whether the window wins it"
-              " back was not measured   -> foreground %s" % describe(user32.GetForegroundWindow()))
+        print("  SKIP  show: the POS stand-in could not take the front, so whether the window takes it"
+              " from the POS was not measured   -> foreground %s" % describe(user32.GetForegroundWindow()))
         return
     ours = user32.GetAncestor(app.root.winfo_id(), 2)
     # Windows parks the keyboard on the top level's own Tk window; Tk routes it to the entry.
-    check("show: the window won the front back from the POS, with the Windows keyboard",
+    check("show: the window took the front from the POS, with the Windows keyboard",
           user32.GetForegroundWindow() == ours and focus_hwnd() == app.root.winfo_id(),
           "foreground %s, keyboard on %s, ours %s / %s" % (
               describe(user32.GetForegroundWindow()), describe(focus_hwnd()), ours, app.root.winfo_id()))
@@ -414,7 +414,7 @@ def check_window_back_in_front():
 STEPS = [card_screen, check_card_screen, swipe_a_card, check_odometer_screen,
          check_category_table, check_submit_enabled, press_close, show_window_again,
          check_back_on_card_screen, swipe_a_second_card, check_second_odometer_screen,
-         send_show, check_pos_driven_after_show, check_window_back_in_front]
+         send_show, check_pos_driven_before_show, check_window_shown_after_clicks]
 
 
 def pump_steps():

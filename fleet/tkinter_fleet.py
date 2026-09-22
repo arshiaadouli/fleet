@@ -51,43 +51,18 @@ def start_socket_server(root, listener):
     """Show the Tkinter window whenever a client connects to the listener.
 
     main.bat (main.py) sends "show" when a fleet card sale is ready at the till. The
-    window goes on screen first; only once it is really showing are the Infinity POS
-    clicks from paths.json made, on a worker thread so the window keeps painting while
-    the POS is driven; then the window is brought back in front with the caret in its
-    entry, where the card swipe has to land.
+    Infinity POS is driven first - the clicks from paths.json, on a worker thread, so
+    the Tk loop keeps turning while the POS is driven - and only then is the window
+    shown, in front, with the caret in its entry, where the card swipe has to land.
     """
-    shows = {"serial": 0}  # bumped per "show", so a stale wait or bring-back drops itself
+    shows = {"serial": 0}  # bumped per "show", so a show that was overtaken drops itself
 
     def show_window():
         shows["serial"] += 1
-        root.deiconify()
-        root.lift()
-        root.focus_force()
-        embedded_browser.bring_to_front(root)
-        root.attributes("-topmost", True)
-        root.after(100, lambda: root.attributes("-topmost", False))
-        # deiconify fires <Map>, which puts the caret back in the entry.
-        wait_until_shown(shows["serial"])
-
-    def wait_until_shown(serial):
-        """Poll until the window is on screen, then hand the POS to a worker.
-
-        deiconify only asks for the window: Tk maps and paints it as the event loop
-        turns, which is exactly what driving the POS from this callback used to stop -
-        the clicks and the second of sleep ran before the window had drawn once. So the
-        wait is a chain of after() calls, and a short one follows the first viewable
-        tick so the paint the map queued has landed before the mouse leaves for the POS.
-        """
-        if serial != shows["serial"] or root.state() == "withdrawn":
-            return  # a newer show took over, or the window was closed in the meantime
-        if not root.winfo_viewable():
-            root.after(50, wait_until_shown, serial)
-            return
-        root.update_idletasks()
-        root.after(150, lambda: threading.Thread(target=drive_pos, args=(serial,), daemon=True).start())
+        threading.Thread(target=drive_pos, args=(shows["serial"],), daemon=True).start()
 
     def drive_pos(serial):
-        """Worker thread: the POS clicks for this sale, then the window back in front."""
+        """Worker thread: the POS clicks for this sale, then the window."""
         try:
             cd_path = path_format(path_data['cd'])
             if not isEmpty(cd_path) and not hasPayments(cd_path):
@@ -99,21 +74,26 @@ def start_socket_server(root, listener):
                 play_sound("error")
         except Exception as error:
             print(f"POS sale check error: {error}")
-        root.after(0, bring_back, serial)
+        root.after(0, show_now, serial)
 
-    def bring_back(serial):
-        """Activating the POS for the clicks put it in front; the swipe is for this window.
+    def show_now(serial):
+        """The POS clicks are done: the window, in front, ready for the swipe.
 
-        focus_force alone is refused now that the POS is the foreground process, so the
-        front is taken back the way Windows allows (embedded_browser.bring_to_front).
+        Activating the POS for the clicks made it the foreground process, and Windows
+        then refuses SetForegroundWindow to everyone else - Tk's focus_force is one
+        such call - so the front is taken the way Windows allows
+        (embedded_browser.bring_to_front).
         """
-        if serial != shows["serial"] or root.state() == "withdrawn":
-            return
+        if serial != shows["serial"]:
+            return  # a newer show is on its way and shows the window itself
+        root.deiconify()
         root.lift()
         root.focus_force()
         embedded_browser.bring_to_front(root)
         root.attributes("-topmost", True)
         root.after(100, lambda: root.attributes("-topmost", False))
+        # deiconify fires <Map>, which puts the caret back in the entry; said again
+        # here for a window that was already on screen.
         focus_input()
 
     def handle_client(conn):

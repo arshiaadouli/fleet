@@ -12,7 +12,7 @@ A check is a list of steps run inside the app's mainloop; a step returns True to
 again on the next tick. Selenium must never be called from a step - the browser only
 answers while the Tk thread pumps messages - so read-backs go through on_worker().
 
-Run the checks from PowerShell, not Git Bash (see tests/README or the memory notes).
+Run the checks from PowerShell, not Git Bash (see the Checks section of the README).
 """
 import ctypes
 import ctypes.wintypes
