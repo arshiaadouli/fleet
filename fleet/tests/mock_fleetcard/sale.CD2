@@ -1,0 +1,11 @@
+
+<lines><count>3</count>
+<line1><line>1</line><upc>ULP</upc><description>Premium 98</description><quantity>17.96</quantity><price>1.658</price><priceset>1.658</priceset><cost>1.4</cost><esmpack>0</esmpack><subbeforetax>27.0727</subbeforetax><subaftertax>29.78</subaftertax><taxamount1>2.7073</taxamount1><discountid>0</discountid><serialno></serialno><taxno>1</taxno><reason>0</reason><tl_fieldtext1>Pump1</tl_fieldtext1><tl_fieldtext2></tl_fieldtext2><tl_fieldtext3></tl_fieldtext3><note></note><notes></notes><itype>P</itype><linecapture><data></data><type></type><note1></note1><note2></note2></linecapture></line1>
+<line2><line>2</line><upc>9300617411109</upc><description>Unleaded</description><quantity>1</quantity><price>3.25</price><priceset>4.8</priceset><cost>1.53</cost><esmpack>0</esmpack><subbeforetax>2.9545</subbeforetax><subaftertax>3.25</subaftertax><taxamount1>0.2955</taxamount1><discountid>1906</discountid><serialno></serialno><taxno>1</taxno><reason>0</reason><tl_fieldtext1></tl_fieldtext1><tl_fieldtext2></tl_fieldtext2><tl_fieldtext3></tl_fieldtext3><note></note><notes></notes><itype>N</itype><linecapture><data></data><type></type><note1></note1><note2></note2></linecapture></line2>
+<line3><line>3</line><upc>9300617074069</upc><description>Unleaded</description><quantity>1</quantity><price>3.25</price><priceset>4.8</priceset><cost>1.53</cost><esmpack>0</esmpack><subbeforetax>2.9545</subbeforetax><subaftertax>3.25</subaftertax><taxamount1>0.2955</taxamount1><discountid>1906</discountid><serialno></serialno><taxno>1</taxno><reason>0</reason><tl_fieldtext1></tl_fieldtext1><tl_fieldtext2></tl_fieldtext2><tl_fieldtext3></tl_fieldtext3><note></note><notes></notes><itype>N</itype><linecapture><data></data><type></type><note1></note1><note2></note2></linecapture></line3>
+<count2>1</count2></lines>
+<payments><pcount>1</pcount><payment1><medianame>VISA</medianame><value>36.28</value><fee>0</fee><change>0</change><medianumber>************8224</medianumber></payment1></payments>
+<salecapture><data></data><type></type><note1></note1><note2></note2></salecapture>
+<salenotes></salenotes>
+<quote></quote>
+<delivery></delivery>

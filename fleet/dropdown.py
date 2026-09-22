@@ -33,8 +33,14 @@ class Dropdown:
             
             return attach_to_session(executor_url, session_id)
 
-        frame_label = ui.panel(root)
-        frame_label.pack(fill="x", padx=16, pady=(0, 8))
+        # The table belongs to the screen area, under the form and above the browser;
+        # packing it straight onto root would drop it below the browser and survive the
+        # move back to the card screen.
+        screen = getattr(root, "_screen_frame", root)
+        frame_label = ui.panel(screen)
+        # No padding below: the gap down to the browser is the window's own margin, so
+        # the table must not add a second one on top of it.
+        frame_label.pack(fill="x", padx=16)
         frame_label.grid_columnconfigure(0, weight=1)
 
         for column, (title, anchor) in enumerate((('Category', "w"), ('Quantity', "e"), ('Price', "e"))):
@@ -43,9 +49,11 @@ class Dropdown:
 
         options = ["Select", "Accessories", "Car Wash", "Engine Oil", "Ethanol Blend", "LPG", "Other", "Repair / Maintenance", "Roadside Assistance", "Super", "Tyres"]
 
+        # Grow for the rows, but never past the screen or the window leaves the desktop
+        # and the form and browser above the table go with it.
         height = root.winfo_height()
         width = root.winfo_width()
-        new_height= height+ 50*len(items)+50
+        new_height = min(height + 50 * len(items) + 50, root.winfo_screenheight() - 80)
         root.geometry(f"{width}x{new_height}")
         result = {}
 

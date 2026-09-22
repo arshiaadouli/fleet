@@ -1,12 +1,24 @@
 {
     "cred": "cred.json",
-    "cd": "C:/InfinityPOS/1.CD2",
-    "lr": "C:/InfinityPOS/1.LR",
+    "cd": "C:/Users/OPA/Documents/code/fleetCard/hex/1.CD2",
+    "lr": "C:/Users/OPA/Documents/code/fleetCard/hex/1.LR",
     "pdfDir": "C:/Users/user/Documents/pdfs",
     "mouseMovement": [
-        { "x": 795, "y": 507 },
-        { "x": 739, "y": 158 },
-        { "x": 729, "y": 151 },
-        { "x": 880, "y": 54 }
+        {
+            "x": 795,
+            "y": 507
+        },
+        {
+            "x": 739,
+            "y": 158
+        },
+        {
+            "x": 729,
+            "y": 151
+        },
+        {
+            "x": 880,
+            "y": 54
+        }
     ]
 }

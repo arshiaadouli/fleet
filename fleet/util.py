@@ -77,9 +77,16 @@ LINUX_SOUNDS = {
 }
 
 def play_sound(kind):
-    """Play the "error" or "notify" alert sound."""
+    """Play the "error" or "notify" alert sound, without waiting for it.
+
+    The window calls this on the Tk thread. A call that blocks for the length of the
+    .wav (playsound 1.2.2 slept about a second) stalls the Tk loop, and the Tk loop is
+    what hands the keyboard back after a click in the embedded page: a click during
+    that second followed by a card swipe would put the card number in the FleetCard
+    form. winsound returns at once and plays in the background.
+    """
     if os.name == "nt":
-        from playsound import playsound
-        playsound(WINDOWS_SOUNDS[kind])
+        import winsound
+        winsound.PlaySound(WINDOWS_SOUNDS[kind], winsound.SND_FILENAME | winsound.SND_ASYNC)
     elif shutil.which("paplay") and os.path.exists(LINUX_SOUNDS[kind]):
         subprocess.run(["paplay", LINUX_SOUNDS[kind]])

@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- Stands in for https://fco.fleetcard.com.au/ : same shape as the real login form,
+     so (//form//input)[4] is the username box and [5] is the password box. -->
+<html>
+<head><meta charset="utf-8"><title>Mock FleetCard login</title></head>
+<body>
+<h1>Mock FleetCard login</h1>
+<form id="loginForm" action="javascript:void(0)">
+  <input type="hidden" id="h1" name="token">
+  <input type="hidden" id="h2" name="state">
+  <input type="hidden" id="h3" name="nonce">
+  <label>User <input type="text" id="username" name="username"></label>
+  <label>Pass <input type="password" id="password" name="password"></label>
+  <input type="submit" value="Log in">
+</form>
+<script>
+  // Count anything that takes the keyboard inside the page: the app must never do this,
+  // or a card swiped into the Tk window would land here instead.
+  window.focusGrabs = 0;
+  document.addEventListener('focusin', function () { window.focusGrabs++; }, true);
+  // Do not really submit; a navigation would end the test page.
+  window.submitted = false;
+  HTMLFormElement.prototype.submit = function () { window.submitted = true; };
+</script>
+</body>
+</html>

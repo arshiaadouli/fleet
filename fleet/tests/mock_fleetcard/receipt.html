@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- Stands in for the FleetCard receipt page form_submit lands on: the URL carries
+     uni_txn_id, and (//table)[2]//tbody//tr[1]//a is the link to the PDF receipt. -->
+<html>
+<head><meta charset="utf-8"><title>Mock FleetCard receipt</title></head>
+<body>
+<h1>Mock FleetCard receipt</h1>
+<table><tr><td>Transaction accepted</td></tr></table>
+<table><tbody><tr><td><a id="pdf" href="receipt.pdf">PDF receipt</a></td></tr></tbody></table>
+<script>
+  // What the form held when it was submitted, for the test to read back.
+  window.submitted = function () { return sessionStorage.getItem('submitted'); };
+</script>
+</body>
+</html>

@@ -1,17 +1,13 @@
 # Install with the setup script for your OS: setup_venv.bat (Windows) or ./setup_venv.sh (Linux)
-# tkinter is not installed via pip. It ships with the Windows Python installer;
-# on Debian/Ubuntu install it with: sudo apt install python3-tk
+# Python 3.10-3.14 (pythonnet's range; 3.13 recommended). tkinter is not installed via
+# pip: it ships with the Windows Python installer; on Debian/Ubuntu: sudo apt install python3-tk
+# The browser is Windows' own WebView2 runtime; setup_venv.bat fetches the SDK it is hosted with.
+
+# Embedded browser: hosts the WebView2 SDK (.NET) in the Tk window
+pythonnet>=3.0.3,<4
 
 # Browser automation
 selenium>=4.6
-undetected-chromedriver
-webdriver-manager
-# undetected-chromedriver imports distutils, which was removed in Python 3.12; setuptools provides it
-setuptools
-
-# Imported at the top of fleet.py, so required for it to start
-fastapi
-httpcore
 
 # Database and HTTP
 pymongo
@@ -19,8 +15,6 @@ requests
 # Loads MONGODB_URI from the .env file (see .env.example)
 python-dotenv
 
-# Windows only: clicking in the Infinity POS window and playing Windows alert sounds
+# Windows only: clicking in the Infinity POS window
 pyautogui; sys_platform == "win32"
 pygetwindow; sys_platform == "win32"
-# playsound 1.3.0 often fails to install on Windows; 1.2.2 installs cleanly
-playsound==1.2.2; sys_platform == "win32"

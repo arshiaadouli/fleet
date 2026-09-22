@@ -117,11 +117,23 @@ def style_root(root):
 
 
 def show_header(root, step):
-    """Pack the shared brand bar for a screen (1 = card, 2 = odometer)."""
+    """Pack the shared brand bar for a screen (1 = card, 2 = odometer).
+
+    One bar per step is created once and re-packed, so the bar belonging to the screen
+    before has to come down first - otherwise both stay packed and the window grows a
+    second navbar as soon as the operator swipes a card.
+    """
     header = _SHARED.get(("header", step))
     if header is None:
         header = _SHARED[("header", step)] = Header(root, step=step)
-    header.pack(fill="x")
+    for key, widget in _SHARED.items():
+        if key[0] == "header" and key[1] != step:
+            widget.pack_forget()
+    content_frame = getattr(root, "_content_frame", None)
+    if content_frame is not None:
+        header.pack(fill="x", before=content_frame)
+    else:
+        header.pack(fill="x")
     return header
 
 

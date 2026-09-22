@@ -1,0 +1,221 @@
+<!doctype html>
+<!-- Stands in for the FleetCard purchase form, shaped so the app's real XPaths apply:
+       (//table//table//input)[1]        sales number   } the nested table, which the
+       (//table//table//input)[5]        card number    } product rows must stay out of
+       (//table//table//input)[10]       check-card box } or these indices shift
+       (//table//table//input)[12]       odometer       }
+       #Rego                             the registration FleetCard answers with
+       (//fieldset//table//input)[1]     add-item button
+       //table[@id='ProductTable']//tr[N]//select  and  (...//input)[2] / [3]
+     ProductTable is deliberately NOT inside another table: if it were, adding rows would
+     shift the sales-number and card-number indices, which is why the real form cannot
+     nest it either. Rows are added asynchronously, like the real page.
+
+     Choosing a tab reloads the page (the app's log shows it), and the reload brings the
+     values back with it, as the real form does. Both halves matter. The reload is what restarts the injectors; the values coming
+     back is what lets them see there is nothing to write and stop writing. -->
+<html>
+<head><meta charset="utf-8"><title>Mock FleetCard purchase</title></head>
+<body>
+<h1>Mock FleetCard purchase</h1>
+<div id="tabs">
+  <a class="tab-btn" href="javascript:void(0)">Cash</a>
+  <a class="tab-btn" href="javascript:void(0)">Cheque</a>
+  <a class="tab-btn" href="javascript:void(0)">Credit</a>
+  <a class="tab-btn" href="javascript:void(0)">Account</a>
+  <a class="tab-btn" href="javascript:void(0)">Fleet Card</a>
+</div>
+
+<table>
+  <tr><td>
+    <table id="fields">
+      <tr><td>Sales no <input id="salesNumber"></td></tr>
+      <tr><td><input id="i2"></td></tr>
+      <tr><td><input id="i3"></td></tr>
+      <tr><td><input id="i4"></td></tr>
+      <tr><td>Card <input id="cardNumber"></td></tr>
+      <tr><td><input id="i6"></td></tr>
+      <tr><td><input id="i7"></td></tr>
+      <tr><td><input id="i8"></td></tr>
+      <tr><td><input id="i9"></td></tr>
+      <tr><td><label>Check card <input type="checkbox" id="confirmCard"></label></td></tr>
+      <tr><td>Rego <input id="Rego"></td></tr>
+      <tr><td>Odometer <input id="odometer"></td></tr>
+    </table>
+    <table><tr><td>-</td></tr></table>
+    <table><tr><td>-</td></tr></table>
+    <table><tr><td>-</td></tr></table>
+    <!-- the 5th nested table: get_exp_month_year reads its first two inputs -->
+    <table id="expiry"><tr><td>Expiry <input id="expMonth" value="12"> /
+      <input id="expYear" value="2027"></td></tr></table>
+  </td></tr>
+</table>
+
+<fieldset>
+  <legend>Items</legend>
+  <table><tr><td><input type="button" id="addItem" value="Add item"></td></tr></table>
+</fieldset>
+
+<table id="ProductTable"><tbody></tbody></table>
+
+<div id="actions">
+  <input type="submit" id="search" value="Search">
+  <input type="submit" id="submitTxn" value="Submit transaction">
+</div>
+
+<script>
+  window.focusGrabs = 0;
+  document.addEventListener('focusin', function () { window.focusGrabs++; }, true);
+
+  var tabs = document.querySelectorAll('.tab-btn');
+  // ?tabclass=... lets a test stand in for a page that marks its open tab with a class
+  // the app does not know, which is the case that once reloaded the page 41 times.
+  var OPEN_TAB = (location.search.match(/tabclass=([\w-]+)/) || [null, 'highlight'])[1];
+  // The real form's list. Unleaded is on it - the driver selects it for the POS
+  // lines - so the mock must offer it too or the test measures the wrong thing.
+  var CATEGORIES = ['Select', 'Merchant Surcharge', 'Premium Unleaded', 'Unleaded',
+                    'Accessories', 'Car Wash', 'Engine Oil', 'Ethanol Blend', 'LPG',
+                    'Other', 'Repair / Maintenance', 'Roadside Assistance', 'Super',
+                    'Tyres'];
+  var TEXT_FIELDS = ['salesNumber', 'cardNumber', 'Rego', 'odometer'];
+
+  function addRow(state) {
+    var row = document.createElement('tr');
+    row.className = 'editorRows';
+    var options = CATEGORIES.map(function (name, index) {
+      return '<option value="' + index + '">' + name + '</option>';
+    }).join('');
+    row.innerHTML = '<td><select>' + options + '</select></td>' +
+                    '<td><input class="line"></td>' +
+                    '<td><input class="qty"></td>' +
+                    '<td><input class="amount"></td>';
+    document.querySelector('#ProductTable tbody').appendChild(row);
+    if (state) {
+      row.querySelector('select').selectedIndex = state.category;
+      row.querySelector('.qty').value = state.qty;
+      row.querySelector('.amount').value = state.amount;
+    }
+    ['select', '.qty', '.amount'].forEach(function (selector) {
+      row.querySelector(selector).addEventListener('change', save);
+    });
+  }
+
+  // ViewState: everything on the form survives a postback.
+  function save() {
+    var activeTab = -1;
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].classList.contains(OPEN_TAB)) { activeTab = i; }
+    }
+    sessionStorage.setItem('form', JSON.stringify({
+      text: TEXT_FIELDS.reduce(function (all, id) {
+        all[id] = document.getElementById(id).value;
+        return all;
+      }, {}),
+      ticked: document.getElementById('confirmCard').checked,
+      tab: activeTab,
+      rows: Array.prototype.map.call(
+        document.querySelectorAll('#ProductTable tbody tr'),
+        function (row) {
+          return {category: row.querySelector('select').selectedIndex,
+                  qty: row.querySelector('.qty').value,
+                  amount: row.querySelector('.amount').value};
+        }
+      )
+    }));
+  }
+
+  function restore() {
+    // Only after a postback. A plain navigation - the next sale's driver.get() - gets
+    // a fresh form, as the real site gives one; ViewState travels in the POST only.
+    if (!sessionStorage.getItem('pending')) { sessionStorage.removeItem('form'); return; }
+    sessionStorage.removeItem('pending');
+    var saved = sessionStorage.getItem('form');
+    if (!saved) { return; }
+    var state = JSON.parse(saved);
+    TEXT_FIELDS.forEach(function (id) { document.getElementById(id).value = state.text[id]; });
+    document.getElementById('confirmCard').checked = state.ticked;
+    if (state.tab >= 0) { tabs[state.tab].classList.add(OPEN_TAB); }
+    state.rows.forEach(addRow);
+  }
+
+  window.postbacks = Number(sessionStorage.getItem('postbacks') || 0);
+  // Synchronous, as a real form post is: chromedriver's click() then blocks until the
+  // reload has finished, which is why products_filler can find the add-item button
+  // straight after clicking the tab. A delayed reload would slip past that wait.
+  function postBack() {
+    window.postbacks++;
+    sessionStorage.setItem('postbacks', window.postbacks);
+    save();
+    sessionStorage.setItem('pending', '1');
+    document.location.reload();
+  }
+
+  restore();
+
+  // The open tab is marked "highlight", as the real page does (from the app's log), and
+  // choosing a tab posts the form back. An app that looks for "active" never sees the
+  // tab as open, clicks it on every reload, and reloads the page without end.
+  for (var t = 0; t < tabs.length; t++) {
+    tabs[t].addEventListener('click', function () {
+      for (var j = 0; j < tabs.length; j++) { tabs[j].classList.remove(OPEN_TAB); }
+      this.classList.add(OPEN_TAB);
+      postBack();
+    });
+  }
+
+  // Text fields do NOT post back: trans_filler types the sales number and card and
+  // then clicks the box with no stale-element error, which the real page could not
+  // manage if a change reloaded it. Only the tab and add-item are known to.
+
+  // Adding a row is client-side: products_filler clicks the same element reference
+  // once per row with no wait and never sees it go stale, which a reload would cause.
+  document.getElementById('addItem').addEventListener('click', function () {
+    addRow(null);
+    save();
+  });
+
+  // Ticking the box is what asks FleetCard to look the card up. The app must NOT
+  // trigger that from this session, so record any real click to prove it did not.
+  window.lookupsAsked = Number(sessionStorage.getItem('lookups') || 0);
+  // Ticking the box is what makes FleetCard look the card up and fill in the
+  // registration; trans_filler polls #Rego for it. Answered after a short delay here.
+  document.getElementById('confirmCard').addEventListener('change', function () {
+    window.lookupsAsked++;
+    sessionStorage.setItem('lookups', window.lookupsAsked);
+    if (this.checked) {
+      window.setTimeout(function () {
+        document.getElementById('Rego').value = 'MOCK123';
+        save();
+      }, 300);
+    }
+  });
+
+  // Submitting the transaction takes the browser to the receipt page, whose URL carries
+  // uni_txn_id; form_submit waits for that and reads the PDF link off the receipt. The
+  // form as it was at that moment is kept so the receipt page can show what was sent.
+  // With ?fail=1 in the URL the submit does nothing, as a rejected transaction leaves
+  // the real form where it is.
+  document.getElementById('submitTxn').addEventListener('click', function () {
+    if (/fail=1/.test(location.search)) { return; }
+    save();
+    sessionStorage.setItem('submitted', sessionStorage.getItem('form'));
+    var n = Number(sessionStorage.getItem('txn') || 0) + 1;
+    sessionStorage.setItem('txn', n);
+    location.href = 'receipt.html?uni_txn_id=MOCK-TXN-' + n;
+  });
+
+  // What the test reads back: one "category|qty|amount" per row.
+  window.productRows = function () {
+    return Array.prototype.map.call(
+      document.querySelectorAll('#ProductTable tbody tr'),
+      function (row) {
+        var select = row.querySelector('select');
+        return [select.options[select.selectedIndex].text,
+                row.querySelector('.qty').value,
+                row.querySelector('.amount').value].join('|');
+      }
+    ).join(' ~ ');
+  };
+</script>
+</body>
+</html>

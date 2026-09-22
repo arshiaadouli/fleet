@@ -1,6 +1,7 @@
 import os
+from typing import Optional
 
-def get_receipt_no(file_path: str) -> str | None:
+def get_receipt_no(file_path: str) -> Optional[str]:
     """Extract the word following 'Receipt No' from a file given its full path."""
 
     if not os.path.exists(file_path):

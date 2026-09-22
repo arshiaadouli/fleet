@@ -1,7 +1,3 @@
-from fastapi import FastAPI
-from fastapi.concurrency import run_in_threadpool
-from fastapi.middleware.cors import CORSMiddleware
-from httpcore import TimeoutException
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -10,7 +6,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from datetime import datetime
 import asyncio
-import undetected_chromedriver as uc
 from time import sleep
 from selenium.webdriver.support.ui import Select
 from dbconn import FleetCardVal
@@ -18,7 +13,6 @@ from hex_reader import xml_to_json
 # from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 # from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 import json
 import queue 
 import threading
@@ -125,7 +119,7 @@ def make_driver_headless(driver, headless=True):
     else:
         new_driver = driver_start_up(False)
         
-    # driver=driver_start_up(headless)
+    driver=driver_start_up(headless)
     driver_login(new_driver)
     input("enter something")
         
@@ -221,10 +215,10 @@ def re_enter_products(driver, card_number, items):
             amount = driver.find_element(By.XPATH, f"(//table[@id='ProductTable']//tr[{items[i]['id']}]//input)[3]")
             amount.clear()
             amount.send_keys(items[i]['price'])
-            try:
-                valid_options.append([card_number, items[i]['description'],  items[i]['subaftertax']])
-            except:
-                valid_options.append([card_number, items[i]['description'],  items[i]['subaftertax']])
+            # These rows come from the category picker (products_filler's invalid_options),
+            # which carries the amount as 'price'. Reading 'subaftertax' here raised KeyError
+            # in both the try and the except, so no re-categorised sale ever submitted.
+            valid_options.append([card_number, items[i]['description'], items[i]['price']])
                 
         else:
             return False
@@ -241,9 +235,29 @@ def get_exp_month_year(driver):
     return [exp_month.get_attribute("value"), exp_year.get_attribute("value")]
 
 
+def sale_lines(cart_products=None):
+    """The rows the purchase form gets: the merchant surcharge, then the POS sale lines.
+
+    The lines come from the .CD2 the POS writes (paths.json "cd"). Kept in one place so
+    the page shown in the Fuelzone window lists exactly what the submitted form holds.
+    """
+    if cart_products is None:
+        cart_products = xml_to_json(path_format(path_data['cd']))
+    total_cost = 0
+    for item in cart_products:
+        total_cost += float(item['subaftertax'])
+    print('total cost', total_cost)
+    surcharge = {'description': 'Merchant Surcharge', 'quantity': '1',
+                 'subaftertax': str(round(2.55 * total_cost / 100, 2))}
+    return [surcharge] + list(cart_products)
+
+
 def products_filler(driver, card_number):
     global invalid_options
     invalid_options=[]
+    # A fresh sale. Left to accumulate, every sale after the first wrote the earlier
+    # sales' lines to the database again, under the new card.
+    valid_options[:] = []
     tab_btn = driver.find_element(By.XPATH, "(//a[contains(@class, 'tab-btn')])[5]")
     tab_btn.click()
     
@@ -258,16 +272,8 @@ def products_filler(driver, card_number):
     
     
     products = driver.find_elements(By.XPATH, "//tr[contains(@class, 'editorRows') ]")
-    
-    total_cost = 0
-    for item in cart_products:
-        total_cost += float(item['subaftertax'])
-    print('total cost', total_cost)
-    product_form_helper = [{'description': 'Merchant Surcharge', 'quantity':'1', 'subaftertax':str(round(2.55 * total_cost / 100, 2))}]
-    
-    for item in cart_products:
-        product_form_helper.append(item)
-        
+
+    product_form_helper = sale_lines(cart_products)
     print("product form helper", product_form_helper)
     # fleet_card = FleetCardVal()
     options = ["Accessories", "Car Wash", "Engine Oil", "Ethanol Blend", "LPG", "Other", "Repair / Maintenance", "Roadside Assistance", "Super", "Tyres"]
@@ -332,30 +338,27 @@ def trans_filler(driver, card_number):
     msg= ''
     wait = WebDriverWait(driver, 60)
 
-    try:
-        element = WebDriverWait(driver, 60).until(
-            lambda d: next(
-                (el for el in d.find_elements(By.XPATH, "(//table[1]//tr[5]//span)[4]") if el.text != ''),
-                None
-            ) or next(
-                (el for el in d.find_elements(By.ID, "Rego") if el.get_attribute("value")),
-                None
-            )
+    # A 60 s wait that runs out raises selenium's TimeoutException to the screen, which
+    # shows it as an error.
+    element = WebDriverWait(driver, 60).until(
+        lambda d: next(
+            (el for el in d.find_elements(By.XPATH, "(//table[1]//tr[5]//span)[4]") if el.text != ''),
+            None
+        ) or next(
+            (el for el in d.find_elements(By.ID, "Rego") if el.get_attribute("value")),
+            None
         )
-        if element:
-            if element.tag_name == "span":
-                print("Error message appeared")
-                msg = "Error: The entered card is invalid"
-            elif element.tag_name == "input":
-                print("Input has value:", element.get_attribute("value"))
-                print("The card is valid")
-                msg = f"Rego is: {element.get_attribute('value')}"
-        else:
-            print("No element found with the desired condition within 60 seconds")
-
-    except TimeoutException:
-        if not check_input.is_selected():
-            check_input.click()
+    )
+    if element:
+        if element.tag_name == "span":
+            print("Error message appeared")
+            msg = "Error: The entered card is invalid"
+        elif element.tag_name == "input":
+            print("Input has value:", element.get_attribute("value"))
+            print("The card is valid")
+            msg = f"Rego is: {element.get_attribute('value')}"
+    else:
+        print("No element found with the desired condition within 60 seconds")
 
     return msg
 
