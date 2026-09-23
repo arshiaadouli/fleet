@@ -66,8 +66,11 @@ class RecordingDb:
 
     def __init__(self):
         self.inserts = []
+        self.down = False   # set for a sale whose database has gone away
 
     def check_db_connection(self):
+        if self.down:
+            raise RuntimeError("the database is down (stand-in)")
         return True
 
     def insert_from_pdf(self, card_number, fuel_type, type, rego, price, datetime, exp_month, exp_year):

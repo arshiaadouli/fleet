@@ -1,4 +1,15 @@
 import embedded_browser  # first: COM must be an STA on this thread before anything uses it
+import sys
+
+# The launcher sends this output to tkinter_fleet.log in the Windows code page. A
+# character that code page cannot hold - a mark in a message, a product description
+# from the POS - raises inside print and ends the thread that was in the middle of a
+# sale; every sale's database record was lost that way. So the log is UTF-8, and what
+# still cannot be encoded is replaced, never raised.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 import tkinter as tk
 import threading
 from fleet import *
@@ -21,6 +32,7 @@ import sys
 import json
 import atexit
 import traceback
+from datetime import datetime
 from selenium.common.exceptions import TimeoutException as SeleniumTimeout
 from hex_reader import *
 import ui_theme as ui
@@ -139,7 +151,7 @@ def start_socket_server(root, listener):
                     conn, _ = s.accept()
                     threading.Thread(target=handle_client, args=(conn,), daemon=True).start()
                 except Exception as e:
-                    print("❌ Accept error:", e)
+                    print("Accept error:", e)
                     break
 
     thread = threading.Thread(target=server, daemon=True)
@@ -613,13 +625,20 @@ def odo_content(driver, card_number, root, elements):
                 play_sound("error")
                 return
             root.after(0, show_success)
-            if db.check_db_connection:
-                if rego:
+            # The sale is done at FleetCard; the record here is for the reports. A
+            # failure is logged and never allowed to end this thread quietly, which is
+            # how every sale's record went missing while the operator saw 'Processed!'.
+            try:
+                if db is not None and rego and db.check_db_connection():
                     for item in valid_options:
-                            print("ITEM DETAILS", item)
-                            from datetime import datetime
-                            date_time=datetime.now()
-                            db.insert_from_pdf(card_number_processed, item[1], "complete", rego, item[2], date_time, exp_month, exp_year)
+                        print("ITEM DETAILS", item)
+                        db.insert_from_pdf(card_number_processed, item[1], "complete", rego, item[2],
+                                           datetime.now(), exp_month, exp_year)
+                elif db is None:
+                    print("Could not record the sale in the database: no connection since start-up")
+            except Exception:
+                print("Could not record the sale in the database:")
+                traceback.print_exc()
 
         threading.Thread(target=task).start()
 

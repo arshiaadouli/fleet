@@ -14,11 +14,13 @@ in the window, and in what would be written to the database:
                          rebuilt for the next customer, one record per line goes to Mongo
 
 A second sale follows straight away, because that is where anything left over from the
-first one shows up.
+first one shows up. A third has the database gone away: the sale is done at FleetCard by
+then, so it must still finish, with the failure in the log rather than a dead thread.
 
     fleet\\.venv\\Scripts\\python.exe tests\\odometer_check.py
     set SCENARIO=timeout && ...           a transaction FleetCard does not accept
 """
+import builtins
 import json
 
 from app_harness import (LINES, SCENARIO, SESSION_STEPS, app, buttons, check, check_form, entries,
@@ -151,6 +153,32 @@ def check_second_sale_writes_only_its_own_lines():
           str(sorted({r["card_number"] for r in written})))
 
 
+# ---- a third sale, with the database gone away --------------------------------------------
+def mark_database_down():
+    print("\n--- a third sale, with the database gone away ---")
+    app.db.down = True
+    state["printed"] = []
+    real_print = builtins.print
+
+    def recording_print(*args, **kwargs):
+        state["printed"].append(" ".join(str(a) for a in args))
+        real_print(*args, **kwargs)
+
+    builtins.print = recording_print
+
+
+def check_after_database_down():
+    print("\n--- after the odometer is confirmed with the database down ---")
+    app.db.down = False
+    check("the sale still went through: the window hid itself for the POS to take over",
+          state.get("outcome") == "success", "outcome %s, window %s" % (state.get("outcome"), app.root.state()))
+    check("nothing was written to the database", len(app.db.inserts) == state["inserts_before"],
+          "%d records" % (len(app.db.inserts) - state["inserts_before"]))
+    check("the log says the record could not be made, instead of the thread dying quietly",
+          any(line.startswith("Could not record the sale in the database") for line in state["printed"]),
+          "; ".join(line for line in state["printed"] if "database" in line)[:200])
+
+
 # ---- a transaction FleetCard does not accept ----------------------------------------------
 def check_after_timeout():
     """form_submit waits 20 s for the receipt page; this looks at the screen after 25 s."""
@@ -179,4 +207,8 @@ else:
         swipe_card("70343059876543210"), wait_for_rego, check_form,
         type_odometer_and_press_enter, check_processing_notice, wait_for_outcome,
         check_after_confirmed, check_second_sale_writes_only_its_own_lines,
+        mark_database_down, check_card_screen_is_back,
+        swipe_card("70343051111222233"), wait_for_rego, check_form,
+        type_odometer_and_press_enter, check_processing_notice, wait_for_outcome,
+        check_after_database_down,
     ])

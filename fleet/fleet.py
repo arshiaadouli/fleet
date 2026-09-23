@@ -1,3 +1,12 @@
+import sys
+
+# Run on its own (fleet.vbs) this output goes to fleet.log in the Windows code page; a
+# product description the code page cannot hold would raise inside print, so the log is
+# UTF-8 and what still cannot be encoded is replaced. The window does the same.
+for _stream in (sys.stdout, sys.stderr):
+    if _stream is not None and hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys

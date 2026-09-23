@@ -25,16 +25,16 @@ class FleetCardVal:
         """Check if the database connection is active."""
         try:
             self.client.admin.command("ping")
-            print("✅ Database connection successful!")
+            print("Database connection successful!")
             return True
         except PyMongoError as e:
-            print("❌ Database connection failed:", e)
+            print("Database connection failed:", e)
             return False
 
     def insert_from_pdf(self, card_number, fuel_type, type, rego, price, datetime, exp_month, exp_year):
         four_digit = card_number[-4:]
         try:
-            print("✅ Connected to the database.")
+            print("Connected to the database.")
 
             existing = self.existing_trans(four_digit, fuel_type, rego)
 
@@ -59,7 +59,7 @@ class FleetCardVal:
                             }
                         },
                     )
-                    print("✅ Data updated successfully. - price change")
+                    print("Data updated successfully. - price change")
                 else:
                     self.collection.update_one(
                         {
@@ -76,7 +76,7 @@ class FleetCardVal:
                             }
                         },
                     )
-                    print("✅ Data updated successfully. - exp change")
+                    print("Data updated successfully. - exp change")
             else:
                 self.collection.insert_one(
                     {
@@ -91,10 +91,10 @@ class FleetCardVal:
                         "full_card_number": card_number,
                     }
                 )
-                print("✅ Data inserted successfully. - insertion")
+                print("Data inserted successfully. - insertion")
 
         except PyMongoError as e:
-            print("❌ Error while inserting into MongoDB:", str(e))
+            print("Error while inserting into MongoDB:", str(e))
 
     def existing_trans(self, card_number, fuel_type, rego, datetime=None):
         """Check if a transaction already exists for this card_number (optionally filtered by datetime)."""
@@ -111,14 +111,14 @@ class FleetCardVal:
             result = self.collection.find_one(query)
 
             if result:
-                print("⚠️ Transaction already exists:", result)
+                print("Transaction already exists:", result)
                 return result
             else:
-                print("✅ No existing transaction found.")
+                print("No existing transaction found.")
                 return None
 
         except PyMongoError as e:
-            print("❌ Error checking existing transaction:", str(e))
+            print("Error checking existing transaction:", str(e))
             return None
 
     def add_fleet_card(self, card_number, fuel_type, rego, datetime=None):
@@ -136,14 +136,14 @@ class FleetCardVal:
             result = self.collection.find_one(query)
 
             if result:
-                print("⚠️ Transaction already exists:", result)
+                print("Transaction already exists:", result)
                 return result
             else:
-                print("✅ No existing transaction found.")
+                print("No existing transaction found.")
                 return None
 
         except PyMongoError as e:
-            print("❌ Error checking existing transaction:", str(e))
+            print("Error checking existing transaction:", str(e))
             return None
 
     def get_all(self):
@@ -151,7 +151,7 @@ class FleetCardVal:
         try:
             return list(self.collection.find())
         except PyMongoError as e:
-            print("❌ Error fetching all documents:", str(e))
+            print("Error fetching all documents:", str(e))
             return None
 
     def get_filtered_rows(self):
@@ -167,7 +167,7 @@ class FleetCardVal:
             }
             return list(self.collection.find(query))
         except PyMongoError as e:
-            print("❌ Error fetching filtered rows:", str(e))
+            print("Error fetching filtered rows:", str(e))
             return None
 
 
