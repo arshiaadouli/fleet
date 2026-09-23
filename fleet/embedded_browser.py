@@ -89,6 +89,7 @@ if DotNetThread.CurrentThread.GetApartmentState() != ApartmentState.STA:
 
 import browser_driver  # noqa: E402
 import ui_theme as ui  # noqa: E402
+import util  # noqa: E402
 from devtools_front_door import FrontDoor  # noqa: E402
 
 LOGIN_URL = "https://fco.fleetcard.com.au/"
@@ -113,9 +114,6 @@ user32.SetFocus.argtypes = [wt.HWND]
 user32.GetAncestor.restype = wt.HWND
 user32.GetAncestor.argtypes = [wt.HWND, wt.UINT]
 user32.GetForegroundWindow.restype = wt.HWND
-user32.SetForegroundWindow.argtypes = [wt.HWND]
-user32.GetWindowThreadProcessId.argtypes = [wt.HWND, wt.LPDWORD]
-user32.AttachThreadInput.argtypes = [wt.DWORD, wt.DWORD, wt.BOOL]
 user32.EnableWindow.argtypes = [wt.HWND, wt.BOOL]
 kernel32.OpenProcess.restype = wt.HANDLE
 kernel32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
@@ -230,27 +228,16 @@ def window_is_foreground(widget):
 def bring_to_front(widget):
     """Make the window this widget lives in the foreground window, keyboard included.
 
-    After the POS has been clicked the POS is the foreground process, and Windows
-    refuses SetForegroundWindow to every other process - Tk's focus_force is one such
-    call, so on its own the window only rises in the z-order while the card swipe still
-    goes to the POS. Attached to the foreground window's input thread, the call is
-    allowed: the documented way round the rule, with no input synthesised.
+    After the POS has been clicked the POS is the foreground process, and Tk's
+    focus_force (a plain SetForegroundWindow) is refused: the window only rises in the
+    z-order while the card swipe still goes to the POS. util.bring_to_front says how
+    the front is taken instead. Tk thread only.
     """
     try:
         ours = user32.GetAncestor(widget.winfo_id(), GA_ROOT)
     except tk.TclError:
-        return
-    front = user32.GetForegroundWindow()
-    if not front or front == ours:
-        user32.SetForegroundWindow(ours)
-        return
-    front_thread = user32.GetWindowThreadProcessId(front, None)
-    our_thread = kernel32.GetCurrentThreadId()
-    user32.AttachThreadInput(front_thread, our_thread, True)
-    try:
-        user32.SetForegroundWindow(ours)
-    finally:
-        user32.AttachThreadInput(front_thread, our_thread, False)
+        return False
+    return util.bring_to_front(ours)
 
 
 def shutdown():

@@ -7,11 +7,11 @@ import json
 import tkinter.font as tkFont
 import os
 from util import play_sound, PATHS_FILE, path_format
-from mousemovement import mouse_movement
+from mousemovement import activate_pos_window, mouse_movement
 from dropdown import *
 from tkinter import ttk
 from dbconn import FleetCardVal
-from mousemovement import mouse_movement
+from mousemovement import activate_pos_window, mouse_movement
 from fleet import valid_options, get_fleetcard_login, login
 # tk_socket_app.py
 import socket
@@ -61,13 +61,39 @@ def start_socket_server(root, listener):
         shows["serial"] += 1
         threading.Thread(target=drive_pos, args=(shows["serial"],), daemon=True).start()
 
+    def on_tk_thread(work, timeout=10):
+        """Run work on the Tk thread and hand back its result (or raise its error)."""
+        done = threading.Event()
+        outcome = {}
+
+        def run():
+            try:
+                outcome["result"] = work()
+            except Exception as error:
+                outcome["error"] = error
+            finally:
+                done.set()
+
+        root.after(0, run)
+        if not done.wait(timeout):
+            raise RuntimeError("the window did not answer in %d s" % timeout)
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome.get("result")
+
     def drive_pos(serial):
-        """Worker thread: the POS clicks for this sale, then the window."""
+        """Worker thread: the POS clicks for this sale, then the window.
+
+        The POS window is brought to the front on the Tk thread (the way Windows allows
+        for a program that is not in front itself, which this one is not after its first
+        sale: see util.bring_to_front); the clicks are made only once it is.
+        """
         try:
             cd_path = path_format(path_data['cd'])
             if not isEmpty(cd_path) and not hasPayments(cd_path):
-                mouse_movement(0, 4)
-                sleep(1)
+                if on_tk_thread(activate_pos_window) is not None:
+                    mouse_movement(0, 4)
+                    sleep(1)
                 if not hasSalenotes(cd_path):
                     play_sound("error")
             else:

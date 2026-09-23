@@ -90,3 +90,43 @@ def play_sound(kind):
         winsound.PlaySound(WINDOWS_SOUNDS[kind], winsound.SND_FILENAME | winsound.SND_ASYNC)
     elif shutil.which("paplay") and os.path.exists(LINUX_SOUNDS[kind]):
         subprocess.run(["paplay", LINUX_SOUNDS[kind]])
+
+
+def bring_to_front(hwnd, tries=5):
+    """Make a window the foreground window, keyboard included; True once it is.
+
+    Windows lets a process take the front only while it is the foreground process, was
+    just started by it, or received the last input. The Fuelzone window has been in the
+    background since its first sale, so a plain SetForegroundWindow from it is refused:
+    pygetwindow's activate() raises on that (which is why the POS was only ever clicked
+    on the first show after the window started), and Tk's focus_force silently does
+    nothing. Attached to the foreground window's input thread, the call is allowed for
+    this process's own window; for another process's window (the POS) the call is only
+    allowed once this thread is attached to that window's thread as well, and the window
+    brought to the top first - measured, not documented. No input is synthesised and
+    nothing flashes. Call it on a thread that has a message queue (the Tk thread):
+    AttachThreadInput fails for one without.
+    """
+    import ctypes
+    import time
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    our_thread = kernel32.GetCurrentThreadId()
+    for _ in range(tries):
+        front = user32.GetForegroundWindow()
+        if front == hwnd:
+            return True
+        threads = {user32.GetWindowThreadProcessId(window, None) for window in (front, hwnd) if window}
+        threads.discard(our_thread)
+        attached = [thread for thread in threads if user32.AttachThreadInput(thread, our_thread, True)]
+        try:
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            user32.SetActiveWindow(hwnd)
+        finally:
+            for thread in attached:
+                user32.AttachThreadInput(thread, our_thread, False)
+        if user32.GetForegroundWindow() == hwnd:
+            return True
+        time.sleep(0.1)
+    return user32.GetForegroundWindow() == hwnd

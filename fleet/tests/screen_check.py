@@ -25,11 +25,19 @@ FLEET_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, FLEET_DIR)
 os.chdir(FLEET_DIR)
 
-# A window of another process, standing in for Infinity POS: the POS clicks activate the
-# POS, and what the 'show' steps have to see is this window winning the front back from
-# it. Started now so it is on screen by the time those steps run; ended at the end.
-POS_STANDIN = subprocess.Popen([sys.executable, "-c", "import tkinter as tk; r = tk.Tk(); "
-                                "r.title('POS stand-in'); r.geometry('360x240+40+40'); r.mainloop()"])
+# Windows of other processes: one stands in for Infinity POS (its title contains what
+# the app looks for, so the app's own activation finds it and has to bring it to the
+# front), the other is whatever else is in front when main.bat is pressed. What the
+# 'show' steps have to see is the POS taking the front for the clicks, from the
+# background, and this window taking it back after them. Started now so they are on
+# screen by the time those steps run; ended at the end.
+def stand_in(title, geometry):
+    return subprocess.Popen([sys.executable, "-c", "import tkinter as tk; r = tk.Tk(); "
+                             "r.title(%r); r.geometry(%r); r.mainloop()" % (title, geometry)])
+
+
+POS_STANDIN = stand_in("Infinity POS stand-in", "360x240+40+40")
+OTHER_STANDIN = stand_in("Other app stand-in", "360x240+420+40")
 
 import embedded_browser
 
@@ -275,14 +283,21 @@ def check_second_odometer_screen():
 
 # ---- main.bat: "show" over the socket --------------------------------------------------
 # main.py connects and sends "show". The Infinity POS clicks from paths.json come FIRST,
-# while the window is still hidden; then the window is shown, in front, caret in the entry.
+# while the window is still hidden and ANOTHER process is in front: the app has to bring
+# the POS window to the front from the background - every time, not only on the first
+# show after it was started, the one time Windows lets a freshly started process take the
+# front - and then the window is shown, in front, caret in the entry. Two rounds, because
+# the second show is the one that used to fail.
+import util  # noqa: E402
+
 user32 = ctypes.windll.user32 if os.name == "nt" else None
 if user32 is not None:
     user32.GetForegroundWindow.restype = wt.HWND
     user32.GetAncestor.restype = wt.HWND
     user32.FindWindowW.restype = wt.HWND
     user32.FindWindowW.argtypes = [wt.LPCWSTR, wt.LPCWSTR]
-pos = {"refocused": []}
+rounds = {}
+refocused = []
 
 
 class GUITHREADINFO(ctypes.Structure):
@@ -299,23 +314,9 @@ def focus_hwnd():
     return info.hwndFocus or 0
 
 
-def bring_to_front(hwnd):
-    """Activate another process's window without synthesising input: attached to the
-    foreground window's input thread, SetForegroundWindow is allowed."""
-    front = user32.GetForegroundWindow()
-    if front and front != hwnd:
-        front_thread = user32.GetWindowThreadProcessId(front, None)
-        our_thread = ctypes.windll.kernel32.GetCurrentThreadId()
-        user32.AttachThreadInput(front_thread, our_thread, True)
-        try:
-            user32.SetForegroundWindow(hwnd)
-        finally:
-            user32.AttachThreadInput(front_thread, our_thread, False)
-    else:
-        user32.SetForegroundWindow(hwnd)
-
-
 def describe(hwnd):
+    if not hwnd:
+        return "none"
     title = ctypes.create_unicode_buffer(128)
     user32.GetWindowTextW(hwnd, title, 128)
     pid = wt.DWORD()
@@ -329,92 +330,120 @@ def free_port():
         return probe.getsockname()[1]
 
 
-def send_show():
-    print("\n--- main.bat: 'show' over the socket, with the window hidden ---")
-    app.root.withdraw()
+def arm_show():
+    """Once: the stubs, the recorder and the listener the app's socket server accepts on."""
     # An unpaid cart with items and sale notes: the case in which the POS is driven.
     app.isEmpty = lambda path: False
     app.hasPayments = lambda path: False
     app.hasSalenotes = lambda path: True
-    hwnd = user32.GetAncestor(app.root.winfo_id(), 2) if user32 else None
-    standin = user32.FindWindowW(None, "POS stand-in") if user32 else None
-
-    def activate_standin():
-        """On the Tk thread, as the worker's clicks are being 'made': the POS takes the front."""
-        bring_to_front(standin)
-        app.root.after(150, lambda: pos.__setitem__("standin_in_front", user32.GetForegroundWindow() == standin))
 
     def record_clicks(start, finish):
-        pos["clicked"] = dict(at=time.time(), points=(start, finish),
-                              viewable=app.root.winfo_viewable(), state=app.root.state(),
-                              visible=bool(user32.IsWindowVisible(hwnd)) if user32 else None,
-                              thread=threading.current_thread().name)
-        if standin:
-            app.root.after(0, activate_standin)
+        """Stands in for the clicks themselves; the activation before them is the app's."""
+        rounds[state["round"]]["clicked"] = dict(
+            at=time.time(), points=(start, finish), viewable=app.root.winfo_viewable(),
+            state=app.root.state(), thread=threading.current_thread().name,
+            foreground=user32.GetForegroundWindow() if user32 else None)
 
     app.mouse_movement = record_clicks
     real_focus_input = app.focus_input
 
     def counted_focus_input(*args, **kwargs):
-        pos["refocused"].append(time.time())
+        refocused.append(time.time())
         return real_focus_input(*args, **kwargs)
 
     app.focus_input = counted_focus_input
-    app.root.bind("<Map>", lambda e: pos.setdefault("mapped_at", time.time())
+    app.root.bind("<Map>", lambda e: rounds[state["round"]].setdefault("mapped_at", time.time())
                   if e.widget is app.root else None, add="+")
     app.PORT = free_port()  # never the live window's 9000
     app.start_socket_server(app.root, app.listen_for_show())
 
-    def knock():
-        time.sleep(0.3)
-        with socket.create_connection(("127.0.0.1", app.PORT), timeout=2) as s:
-            s.sendall(b"show")
 
-    threading.Thread(target=knock, daemon=True).start()
+def send_show(number):
+    def step():
+        print("\n--- main.bat: 'show' %d over the socket, window hidden, another app in front ---" % number)
+        if number == 1:
+            arm_show()
+        state["round"] = number
+        rounds[number] = {}
+        if user32 is not None:
+            # The other app in front, as the POS or anything else is when main.bat is
+            # pressed; from here that is allowed, this process being in front now.
+            other = user32.FindWindowW(None, "Other app stand-in")
+            if other:
+                util.bring_to_front(other)
+                rounds[number]["other_in_front"] = user32.GetForegroundWindow() == other
+        app.root.withdraw()
+
+        def knock():
+            time.sleep(0.3)
+            with socket.create_connection(("127.0.0.1", app.PORT), timeout=2) as s:
+                s.sendall(b"show")
+
+        threading.Thread(target=knock, daemon=True).start()
+    step.__name__ = "send_show_%d" % number
+    return step
 
 
-def check_pos_driven_before_show():
-    if "clicked" not in pos:
-        return True
-    clicked = pos["clicked"]
-    check("show: the POS clicks from paths.json were made (mouse_movement(0, 4))",
-          clicked["points"] == (0, 4), str(clicked["points"]))
-    check("show: they were made while the window was still hidden",
-          not clicked["viewable"] and clicked["state"] == "withdrawn" and "mapped_at" not in pos,
-          str(clicked))
-    check("show: they ran off the Tk thread, so the Tk loop kept turning",
-          clicked["thread"] != "MainThread", clicked["thread"])
+def check_pos_driven(number):
+    def step():
+        this = rounds[number]
+        if "clicked" not in this:
+            return True
+        clicked = this["clicked"]
+        label = "show %d" % number
+        check("%s: the POS clicks from paths.json were made (mouse_movement(0, 4))" % label,
+              clicked["points"] == (0, 4), str(clicked["points"]))
+        check("%s: they were made while the window was still hidden" % label,
+              not clicked["viewable"] and clicked["state"] == "withdrawn" and "mapped_at" not in this,
+              str(clicked))
+        check("%s: they ran off the Tk thread, so the Tk loop kept turning" % label,
+              clicked["thread"] != "MainThread", clicked["thread"])
+        if user32 is None:
+            return
+        if not this.get("other_in_front"):
+            print("  SKIP  %s: another app could not be put in front first, so the POS coming to the"
+                  " front from the background was not measured" % label)
+        standin = user32.FindWindowW(None, "Infinity POS stand-in")
+        check("%s: the POS window was in front when the clicks were made" % label,
+              bool(standin) and clicked["foreground"] == standin,
+              "foreground %s, POS stand-in %s" % (describe(clicked["foreground"]), describe(standin)))
+    step.__name__ = "check_pos_driven_%d" % number
+    return step
 
 
-def check_window_shown_after_clicks():
-    if "clicked" not in pos:
-        check("show: the POS was driven at all", False)
-        return
-    refocused = [t for t in pos["refocused"] if t > pos["clicked"]["at"] + 1.0]
-    if not refocused or time.time() < refocused[0] + 0.3:
-        return True  # show_now follows the clicks and their second of sleep; let it land
-    check("show: the window was shown only after the clicks and their second of sleep",
-          "mapped_at" in pos and pos["mapped_at"] >= pos["clicked"]["at"] + 1.0,
-          "clicked at %s, mapped at %s" % (pos["clicked"]["at"], pos.get("mapped_at")))
-    check("show: the window is on screen with the caret in its entry",
-          app.root.state() == "normal" and app.root.focus_lastfor() is entries()[0],
-          "state %s, caret on %s" % (app.root.state(), app.root.focus_lastfor()))
-    if not pos.get("standin_in_front"):
-        print("  SKIP  show: the POS stand-in could not take the front, so whether the window takes it"
-              " from the POS was not measured   -> foreground %s" % describe(user32.GetForegroundWindow()))
-        return
-    ours = user32.GetAncestor(app.root.winfo_id(), 2)
-    # Windows parks the keyboard on the top level's own Tk window; Tk routes it to the entry.
-    check("show: the window took the front from the POS, with the Windows keyboard",
-          user32.GetForegroundWindow() == ours and focus_hwnd() == app.root.winfo_id(),
-          "foreground %s, keyboard on %s, ours %s / %s" % (
-              describe(user32.GetForegroundWindow()), describe(focus_hwnd()), ours, app.root.winfo_id()))
+def check_window_shown(number):
+    def step():
+        this = rounds[number]
+        label = "show %d" % number
+        if "clicked" not in this:
+            check("%s: the POS was driven at all" % label, False)
+            return
+        later = [t for t in refocused if t > this["clicked"]["at"] + 1.0]
+        if not later or time.time() < later[0] + 0.3:
+            return True  # show_now follows the clicks and their second of sleep; let it land
+        check("%s: the window was shown only after the clicks and their second of sleep" % label,
+              "mapped_at" in this and this["mapped_at"] >= this["clicked"]["at"] + 1.0,
+              "clicked at %s, mapped at %s" % (this["clicked"]["at"], this.get("mapped_at")))
+        check("%s: the window is on screen with the caret in its entry" % label,
+              app.root.state() == "normal" and app.root.focus_lastfor() is entries()[0],
+              "state %s, caret on %s" % (app.root.state(), app.root.focus_lastfor()))
+        if user32 is None:
+            return
+        ours = user32.GetAncestor(app.root.winfo_id(), 2)
+        # Windows parks the keyboard on the top level's own Tk window; Tk routes it to the entry.
+        check("%s: the window took the front from the POS, with the Windows keyboard" % label,
+              user32.GetForegroundWindow() == ours and focus_hwnd() == app.root.winfo_id(),
+              "foreground %s, keyboard on %s, ours %s / %s" % (
+                  describe(user32.GetForegroundWindow()), describe(focus_hwnd()), ours, app.root.winfo_id()))
+    step.__name__ = "check_window_shown_%d" % number
+    return step
 
 
 STEPS = [card_screen, check_card_screen, swipe_a_card, check_odometer_screen,
          check_category_table, check_submit_enabled, press_close, show_window_again,
          check_back_on_card_screen, swipe_a_second_card, check_second_odometer_screen,
-         send_show, check_pos_driven_before_show, check_window_shown_after_clicks]
+         send_show(1), check_pos_driven(1), check_window_shown(1),
+         send_show(2), check_pos_driven(2), check_window_shown(2)]
 
 
 def pump_steps():
@@ -446,4 +475,5 @@ app.root.after(400, pump_steps)
 app.root.mainloop()
 app.root.destroy()
 POS_STANDIN.terminate()
+OTHER_STANDIN.terminate()
 sys.exit(1 if failures else 0)
