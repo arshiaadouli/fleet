@@ -43,6 +43,8 @@ FAMILY = "Segoe UI"
 FAMILY_SEMIBOLD = "Segoe UI Semibold"
 FONT_BRAND = (FAMILY_SEMIBOLD, 12)
 FONT_BRAND_SUB = (FAMILY, 10)
+FONT_VERSION = (FAMILY, 9)
+APP_VERSION = "v1.1"   # shown after the brand in the nav bar
 FONT_STEP = (FAMILY_SEMIBOLD, 9)
 FONT_CAPTION = (FAMILY_SEMIBOLD, 9)
 FONT_BODY = (FAMILY, 10)
@@ -167,7 +169,9 @@ class Header(tk.Canvas):
             self.create_image(x, mid, image=logo, anchor="w")
             x += 34
         brand = self.create_text(x, mid, text="Fuelzone", font=FONT_BRAND, fill=NAVY_TEXT, anchor="w")
-        x = self.bbox(brand)[2] + 10
+        version = self.create_text(self.bbox(brand)[2] + 6, mid + 1, text=APP_VERSION,
+                                   font=FONT_VERSION, fill=NAVY_TEXT_MUTED, anchor="w")
+        x = self.bbox(version)[2] + 10
         self.create_line(x, mid - 9, x, mid + 9, fill=NAVY_RAISED)
         self.create_text(x + 10, mid, text="FleetCard", font=FONT_BRAND_SUB, fill=NAVY_TEXT_MUTED, anchor="w")
 
